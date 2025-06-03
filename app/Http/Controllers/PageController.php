@@ -16,9 +16,17 @@ use App\Models\Referance;
 use App\Models\Subscribe;
 use App\Models\Appointment;
 use Illuminate\Http\Request;
+use App\Services\AppointmentService;
 
 class PageController extends Controller
 {
+    protected $appointmentService;
+
+    public function __construct(AppointmentService $appointmentService)
+    {
+        $this->appointmentService = $appointmentService;
+    }
+
     public function index()
     {
         $slider = Slider::where('lang', app()->getLocale())->where('status', 1)->first();
@@ -298,33 +306,33 @@ class PageController extends Controller
 
     public function randevu(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required',
-            'phone' => 'required',
-            'date' => 'required',
-            'time' => 'required',
-            'service_id' => 'required',
-            'team_id' => 'nullable',
-        ],[
-            'name.required' => __('Ad Soyad alanı zorunludur.'),
-            'phone.required' => __('Telefon alanı zorunludur.'),
-            'date.required' => __('Tarih alanı zorunludur.'),
-            'time.required' => __('Saat alanı zorunludur.'),
-            'service_id.required' => __('Hizmet alanı zorunludur.'),
-            'team_id.nullable' => __('Ekibimiz alanı isteğe bağlıdır.'),
-        ]);
+        $validated = $this->appointmentService->validateAppointment($request);
+        $appointmentDateTime = $this->appointmentService->formatDateTime($request->date, $request->time);
 
-        $formattedDate = Carbon::createFromFormat('d/m/Y', $request->date)
-            ->format('Y-m-d');
-        $date = $formattedDate . ' ' . $request->time . ':00';
+        if ($this->appointmentService->isTimeBlocked($appointmentDateTime, $validated['team_id'] ?? null)) {
+            $errorMessage = $this->appointmentService->getBlockedReason($appointmentDateTime, $validated['team_id'] ?? null);
+            return redirect()
+                ->back()
+                ->withErrors(['time' => $errorMessage])
+                ->withInput();
+        }
 
-        unset($validated['date']);
-        $validated['date'] = $date;
-        Appointment::create($validated);
+        $this->appointmentService->createAppointment($validated, $appointmentDateTime);
+        return $this->sendSuccessResponse();
+    }
 
+    private function sendErrorResponse()
+    {
+        return redirect()
+            ->back()
+            ->withErrors(['time' => __('Seçilen tarih ve saat için randevu alınamaz.')])
+            ->withInput();
+    }
+
+    private function sendSuccessResponse()
+    {
         return redirect()
             ->back()
             ->with('AppointmentSuccess', __('Randevu başarıyla oluşturuldu.'));
     }
-
 }

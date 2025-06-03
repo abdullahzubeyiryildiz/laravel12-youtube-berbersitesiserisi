@@ -26,6 +26,14 @@
                                     {{ session('AppointmentSuccess') }}
                                 </div>
                             @endif
+
+                            @if ($errors->any())
+                                <div class="alert alert-danger">
+                                    @foreach ($errors->all() as $error)
+                                        <p>{{ $error }}</p>
+                                    @endforeach
+                                </div>
+                            @endif
                             <form class="form1 clearfix" action="{{route('randevu.post')}}" method="post">
                                 @csrf
                                 <div class="row">
